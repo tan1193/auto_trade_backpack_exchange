@@ -3,8 +3,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const backpack_client_1 = require("./backpack_client");
 
 /// EDIT HERE ///
-const API_KEY = "VC2jGOXfxxxxxxxxxxxxxxxxxxxx="
-const API_SECRET = "EaIvdhigkxxxxxxxxxxxxxxxx="
+const API_KEY = "API_KEY"
+const API_SECRET = "API_SECRET"
+var solToStop = 2.0;
 /////////////
 
 function delay(ms) {
@@ -16,8 +17,8 @@ function delay(ms) {
 
 function getNowFormatDate() {
     var date = new Date();
-    var seperator1 = "-";
-    var seperator2 = ":";
+    var separator1 = "-";
+    var separator2 = ":";
     var month = date.getMonth() + 1;
     var strDate = date.getDate();
     var strHour = date.getHours();
@@ -38,29 +39,33 @@ function getNowFormatDate() {
     if (strSecond >= 0 && strSecond <= 9) {
         strSecond = "0" + strSecond;
     }
-    var currentdate = date.getFullYear() + seperator1 + month + seperator1 + strDate
-        + " " + strHour + seperator2 + strMinute
-        + seperator2 + strSecond;
-    return currentdate;
+    var currentDate = date.getFullYear() + separator1 + month + separator1 + strDate
+        + " " + strHour + separator2 + strMinute
+        + separator2 + strSecond;
+    return currentDate;
 }
 
-let successbuy = 0;
-let sellbuy = 0;
+let successBuy = 0;
+let successSell = 0;
 
 const init = async (client) => {
     try {
         console.log("\n============================")
-        console.log(`Total Buy: ${successbuy} | Total Sell: ${sellbuy}`);
+        console.log(`Total Buy: ${successBuy} | Total Sell: ${successSell}`);
         console.log("============================\n")
-        
-        console.log(getNowFormatDate(), "Waiting 10 seconds...");
-        await delay(10000);
 
-        let userbalance = await client.Balance();
-        if (userbalance.USDC.available > 5) {
-            await buyfun(client);
+        console.log(getNowFormatDate(), "Waiting 5 seconds...");
+        await delay(5000);
+
+        let userBalance = await client.Balance();
+        // log user balance
+   
+
+        if (userBalance.USDC.available > 5) {
+            await buy(client);
         } else {
-            await sellfun(client);
+           
+            await sell(client);
             return;
         }
     } catch (e) {
@@ -75,82 +80,88 @@ const init = async (client) => {
 
 
 
-const sellfun = async (client) => {
+const sell = async (client) => {
     let GetOpenOrders = await client.GetOpenOrders({ symbol: "SOL_USDC" });
     if (GetOpenOrders.length > 0) {
         let CancelOpenOrders = await client.CancelOpenOrders({ symbol: "SOL_USDC" });
         console.log(getNowFormatDate(), "All pending orders canceled");
     }
 
-    let userbalance2 = await client.Balance();
-    console.log(getNowFormatDate(), `My Account Infos: ${userbalance2.SOL.available} $SOL | ${userbalance2.USDC.available} $USDC`, );
+    let userBalance2 = await client.Balance();
     
-    let { lastPrice: lastPriceask } = await client.Ticker({ symbol: "SOL_USDC" });
-    console.log(getNowFormatDate(), "Price sol_usdc:", lastPriceask);
-    let quantitys = (userbalance2.SOL.available - 0.02).toFixed(2).toString();
-    console.log(getNowFormatDate(), `Trade... ${quantitys} $SOL to ${(lastPriceask * quantitys).toFixed(2)} $USDC`);
+    if (userBalance2.SOL.available <= solToStop) {
+        // stop trading if balance is less than solToStop
+        console.log(getNowFormatDate(), `Balance is less than ${solToStop}, stop trading`);
+        return;
+    }
+    console.log(getNowFormatDate(), `My Account Infos: ${userBalance2.SOL.available} $SOL | ${userBalance2.USDC.available} $USDC`,);
+
+    let { lastPrice: lastPriceAsk } = await client.Ticker({ symbol: "SOL_USDC" });
+    console.log(getNowFormatDate(), "Price sol_usdc:", lastPriceAsk);
+    let quantity = (userBalance2.SOL.available - 0.02).toFixed(2).toString();
+    console.log(getNowFormatDate(), `Trade... ${quantity} $SOL to ${(lastPriceAsk * quantity).toFixed(2)} $USDC`);
     let orderResultAsk = await client.ExecuteOrder({
         orderType: "Limit",
-        price: lastPriceask.toString(),
-        quantity: quantitys,
+        price: lastPriceAsk.toString(),
+        quantity: quantity,
         side: "Ask",
         symbol: "SOL_USDC",
         timeInForce: "IOC"
     })
     if (orderResultAsk?.status == "Filled" && orderResultAsk?.side == "Ask") {
-        sellbuy += 1;
+        successSell += 1;
         console.log(getNowFormatDate(), "Sold successfully:", `Order number:${orderResultAsk.id}`);
         init(client);
     } else {
-        if (orderResultAsk?.status == 'Expired'){
+        if (orderResultAsk?.status == 'Expired') {
             throw new Error("Sell Order Expired");
-        } else{
-            
+        } else {
+
             throw new Error(orderResultAsk?.status);
         }
     }
 }
 
-const buyfun = async (client) => {
+const buy = async (client) => {
     let GetOpenOrders = await client.GetOpenOrders({ symbol: "SOL_USDC" });
     if (GetOpenOrders.length > 0) {
         let CancelOpenOrders = await client.CancelOpenOrders({ symbol: "SOL_USDC" });
         console.log(getNowFormatDate(), "All pending orders canceled");
     }
-    let userbalance = await client.Balance();
+    let userBalance = await client.Balance();
     let balanceSol = 0;
-    if (userbalance.SOL) {
-        balanceSol = userbalance.SOL.available
+    if (userBalance.SOL) {
+        balanceSol = userBalance.SOL.available
     }
-    console.log(getNowFormatDate(), `My Account Infos: ${balanceSol} $SOL | ${userbalance.USDC.available} $USDC`, );
+    console.log(getNowFormatDate(), `My Account Infos: ${balanceSol} $SOL | ${userBalance.USDC.available} $USDC`,);
     let { lastPrice } = await client.Ticker({ symbol: "SOL_USDC" });
     console.log(getNowFormatDate(), "Price of sol_usdc:", lastPrice);
-    let quantitys = ((userbalance.USDC.available - 2) / lastPrice).toFixed(2).toString();
-    console.log(getNowFormatDate(), `Trade ... ${(userbalance.USDC.available - 2).toFixed(2).toString()} $USDC to ${quantitys} $SOL`);
+    let quantity = ((userBalance.USDC.available - 2) / lastPrice).toFixed(2).toString();
+    console.log(getNowFormatDate(), `Trade ... ${(userBalance.USDC.available - 2).toFixed(2).toString()} $USDC to ${quantity} $SOL`);
     let orderResultBid = await client.ExecuteOrder({
         orderType: "Limit",
         price: lastPrice.toString(),
-        quantity: quantitys,
+        quantity: quantity,
         side: "Bid",
         symbol: "SOL_USDC",
         timeInForce: "IOC"
     })
     if (orderResultBid?.status == "Filled" && orderResultBid?.side == "Bid") {
-        successbuy += 1;
+        successBuy += 1;
         console.log(getNowFormatDate(), "Bought successfully:", `Order number: ${orderResultBid.id}`);
         init(client);
     } else {
-        if (orderResultBid?.status == 'Expired'){
+        if (orderResultBid?.status == 'Expired') {
             throw new Error("Buy Order Expired");
-        } else{
+        } else {
             throw new Error(orderResultBid?.status);
         }
     }
 }
 
 (async () => {
-    const apisecret = API_SECRET;
-    const apikey = API_KEY;
-    const client = new backpack_client_1.BackpackClient(apisecret, apikey);
+    const apiSecret = API_SECRET;
+    const apiKey = API_KEY;
+    const client = new backpack_client_1.BackpackClient(apiSecret, apiKey);
     init(client);
 })()
